@@ -19,35 +19,63 @@
 # Nicholas 'Aquarion' Avenell 2015
 
 import socket
+import sys
+import ConfigParser
 
 class Kettle():
+
+    config = False
 
     kettleconnected = 0
     current_temp = False
     is_boiling = False
     is_warm = False
     configip = 0
-    ip = 0
+    ip = False
 
-    ip_range = "192.168.0.%d"
+    ip_range = False
 
     is_boiling = False
 
     def __init__(self, configip, argip):
+        self.config = ConfigParser.ConfigParser()
+        sucess = self.config.read('ikettle.conf')
+
+        try:
+            self.ip = self.config.get('Network', 'kettleip')
+            self.ip_range = self.config.get('Network', 'ip_range')
+        except ConfigParser.NoSectionError:
+            self.config.add_section('Network')
+        except ConfigParser.NoOptionError:
+            pass
+
+        if not self.ip_range:
+            self.ip_range = "192.168.0.%d"
+            self.config.set('Network', 'ip_range', self.ip_range)
+            self.save_config()
+
         self.kettleconnected = 0
-        self.configip = configip
-        self.ip = configip
-        if (argip):
-            self.ip = argip
+        #self.configip = configip
+        #self.ip = configip
 
-        if not self.ip:
+        if not self.ip or not self.ask_if_kettle(self.ip):
             self.ip = self.find(self.ip_range)
+            self.config.set('Network', 'kettleip', self.ip)
+            self.save_config()
 
-        if not self.ip:
+
+        if self.ip:
+            print "Found kettle on %s" % self.ip
+        else:
             raise Exception("Kettle Not Found")
 
         self.kconnect()
         self.update_status()
+
+    def save_config(self):
+        # Writing our configuration file to 'example.cfg'
+        with open('ikettle.conf', 'wb') as configfile:
+            self.config.write(configfile)
 
 
     def set_temp(self, temp):
@@ -59,10 +87,15 @@ class Kettle():
             '65'  : '0x200'
         }
 
+        if not self.is_boiling:
+            print "Won't set temperature until it's boiling"
+            return False
+
         if temp in temperatures:
             self.kettlesend("set sys output %s" % temperatures[temp])
 
-        self.bwarm.connect("clicked", self.clicksend, "set sys output 0x8")
+        return True
+        #self.bwarm.connect("clicked", self.clicksend, "set sys output 0x8")
         
 
 
@@ -71,6 +104,9 @@ class Kettle():
             self.kettlesend("set sys output 0x4")
         else:
             self.kettlesend("set sys output 0x0")
+
+    def togglewarm(self):
+        self.kettlesend("set sys output 0x8")
 
     def stopboil(self):
         self.kettlesend("set sys output 0x0")
@@ -96,6 +132,7 @@ class Kettle():
                 return
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
+            # self.sock.settimeout(500)
             self.sock.connect((self.ip,2000))
             self.sock.send("HELLOKETTLE\n")
             return True
@@ -105,6 +142,7 @@ class Kettle():
 
     def update_status(self):
         self.kettlesend("get sys status")
+        return self.current_status()
 
     def check_connected(self):
         if (self.kettleconnected == 0):
@@ -130,28 +168,66 @@ class Kettle():
                         key = 0
                     else:
                         key = ord(myline[15]) & 0x3f
+
+                        print "100:  %s " % (key)
+
+                        # print "100:  %s " % (key&0x20)
+                        # print "95:   %s " % (key&0x10)
+                        # print "80:   %s " % (key&0x8)
+                        # print "65:   %s " % (key&0x4)
+                        # print "Warm: %s " % (key&0x2)
+                        # print "Boil: %s " % (key&0x1)
+
+                        self.current_temp = 100
+
+                        if key&0x20:
+                            self.current_temp = 100
+                        elif key&0x10:
+                            self.current_temp = 95
+                        elif key&0x8:
+                            self.current_temp = 80
+                        elif key&0x4:
+                            self.current_temp = 65
+
+                        if key&0x2:
+                            self.is_warm = True
+                        else:
+                            self.is_warm = False
+
+                        if key&0x1:
+                            self.is_boiling = True
+                        else:
+                            self.is_boiling = False
+
                 if (myline == "sys status 0x100"):
+                    print "<<<   Temp is 100"
                     self.current_temp = '100'
                 elif (myline == "sys status 0x95"):
+                    print "<<<   Temp is 95"
                     self.current_temp = '95'
                 elif (myline == "sys status 0x80"):
+                    print "<<<   Temp is 80"
                     self.current_temp = '80'
                 elif (myline == "sys status 0x65"):
+                    print "<<<   Temp is 65"
                     self.current_temp = '65'
-                elif (myline == "sys status 0x11"):
-                    self.is_warm = False
-                elif (myline == "sys status 0x10"):
-                    self.is_warm = True
+                elif (myline == "sys status 0x8"):
+                    print "<<<   Warming toggled"
+                    #self.is_warm = True ## Rely on status update for this
                 elif (myline == "sys status 0x5"):
+                    print "<<<   Boiling? True"
                     self.is_boiling = True
                 elif (myline == "sys status 0x0"):
+                    print "<<<   RESET"
                     self.is_boiling = False
                     self.is_warm = False
                     self.current_temp = False
                 elif (myline == "sys status 0x3"):
+                    print "<<<   Recently finished boiling"
                     self.is_boiling = False
                     self.has_boiled = True
                 elif (myline == "sys status 0x1"):
+                    print "<<<   Standby"
                     self.is_boiling = False
                     self.has_boiled = False
 
@@ -174,36 +250,40 @@ class Kettle():
 
 
         for n in range(1,255):
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(1)
             ip = ip_range % n
             
-            print ip
-            try:
-                sock.connect((ip, 2000))
-                print " - Responded"
-                print " - Are you a kettle?"
-
-                try:
-                    sock.settimeout(30)
-                    sock.send("HELLOKETTLE\n")
-                    response = sock.recv(4096)
-                    if response.startswith("HELLOAPP"):
-                        print " - Yes!"
-                        return ip
-                    else:
-                        print "No! %s" % response
-                except socket.timeout:
-                    print " - No, you are not."
-
-
-            except socket.timeout:
-                print " - Timeout" 
-            except socket.error:
-                print " - Refused"
-            except Exception as e:
-                exc_type, exc_obj, exc_tb = sys.exc_info()
-                print exc_type, exc_obj
-            sock.close()
+            if self.ask_if_kettle(ip):
+                return ip
 
         return False
+
+    def ask_if_kettle(self, ip):
+        print ip,
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(.2)
+            sock.connect((ip, 2000))
+            print " - Responded"
+            print " - Are you a kettle?"
+
+            try:
+                sock.settimeout(30)
+                sock.send("HELLOKETTLE\n")
+                response = sock.recv(4096)
+                if response.startswith("HELLOAPP"):
+                    print " - Yes!"
+                    return True
+                else:
+                    print "No! %s" % response
+            except socket.timeout:
+                print " - No, you are not."
+
+
+        except socket.timeout:
+            print " - Timeout" 
+        except socket.error:
+            print " - Refused"
+        except Exception as e:
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            print exc_type, exc_obj
+        sock.close()
