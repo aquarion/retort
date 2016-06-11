@@ -52,4 +52,4 @@ def temp(temperature):
 	kettle.set_temp(temperature)
 	return jsonify(kettle.current_status())
 
-app.run(debug=True)
+#app.run(debug=True)
