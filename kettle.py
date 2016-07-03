@@ -21,6 +21,8 @@
 import socket
 import sys
 import ConfigParser
+import logging
+
 
 class Kettle():
 
@@ -38,6 +40,8 @@ class Kettle():
     is_boiling = False
 
     def __init__(self, configip, argip):
+	logger = logging.getLogger("Kettle")
+
         self.config = ConfigParser.ConfigParser()
         sucess = self.config.read('ikettle.conf')
 
@@ -65,7 +69,7 @@ class Kettle():
 
 
         if self.ip:
-            print "Found kettle on %s" % self.ip
+            logging.info("Found kettle on %s" % self.ip)
         else:
             raise Exception("Kettle Not Found")
 
@@ -88,7 +92,7 @@ class Kettle():
         }
 
         if not self.is_boiling:
-            print "Won't set temperature until it's boiling"
+            logging.info("Won't set temperature until it's boiling")
             return False
 
         if temp in temperatures:
@@ -112,14 +116,14 @@ class Kettle():
         self.kettlesend("set sys output 0x0")
 
     def kettlesend(self, data):
-        print ">>> %s " % data
+        logging.info(">>> %s " % data)
         self.sock.send(data+"\n")
         line = self.sock.recv(4096)
         self.handler(line)
 
 
     def gotofail(self):
-        print "Closing"
+        logging.info("Closing")
         try:
             self.sock.close()
         except:
@@ -153,13 +157,13 @@ class Kettle():
 
     def handler(self, line):
 
-        print line
+        logging.info(line)
         if not len(line):  # "Connection closed."
             self.kconnect()
             return False
         else:
             for myline in line.splitlines():
-                print "<<< %s " % myline
+                logging.info("<<< %s " % myline)
                 if (myline.startswith("HELLOAPP")):
                     self.kettleconnected = 1
                     self.update_status()
@@ -169,14 +173,14 @@ class Kettle():
                     else:
                         key = ord(myline[15]) & 0x3f
 
-                        print "100:  %s " % (key)
+                        logging.info("100:  %s " % (key))
 
-                        # print "100:  %s " % (key&0x20)
-                        # print "95:   %s " % (key&0x10)
-                        # print "80:   %s " % (key&0x8)
-                        # print "65:   %s " % (key&0x4)
-                        # print "Warm: %s " % (key&0x2)
-                        # print "Boil: %s " % (key&0x1)
+                        # logging.info("100:  %s " % (key&0x20))
+                        # logging.info("95:   %s " % (key&0x10))
+                        # logging.info("80:   %s " % (key&0x8))
+                        # logging.info("65:   %s " % (key&0x4))
+                        # logging.info("Warm: %s " % (key&0x2))
+                        # logging.info("Boil: %s " % (key&0x1))
 
                         self.current_temp = 100
 
@@ -200,34 +204,34 @@ class Kettle():
                             self.is_boiling = False
 
                 if (myline == "sys status 0x100"):
-                    print "<<<   Temp is 100"
+                    logging.info("<<<   Temp is 100")
                     self.current_temp = '100'
                 elif (myline == "sys status 0x95"):
-                    print "<<<   Temp is 95"
+                    logging.info("<<<   Temp is 95")
                     self.current_temp = '95'
                 elif (myline == "sys status 0x80"):
-                    print "<<<   Temp is 80"
+                    logging.info("<<<   Temp is 80")
                     self.current_temp = '80'
                 elif (myline == "sys status 0x65"):
-                    print "<<<   Temp is 65"
+                    logging.info("<<<   Temp is 65")
                     self.current_temp = '65'
                 elif (myline == "sys status 0x8"):
-                    print "<<<   Warming toggled"
+                    logging.info("<<<   Warming toggled")
                     #self.is_warm = True ## Rely on status update for this
                 elif (myline == "sys status 0x5"):
-                    print "<<<   Boiling? True"
+                    logging.info("<<<   Boiling? True")
                     self.is_boiling = True
                 elif (myline == "sys status 0x0"):
-                    print "<<<   RESET"
+                    logging.info("<<<   RESET")
                     self.is_boiling = False
                     self.is_warm = False
                     self.current_temp = False
                 elif (myline == "sys status 0x3"):
-                    print "<<<   Recently finished boiling"
+                    logging.info("<<<   Recently finished boiling")
                     self.is_boiling = False
                     self.has_boiled = True
                 elif (myline == "sys status 0x1"):
-                    print "<<<   Standby"
+                    logging.info("<<<   Standby")
                     self.is_boiling = False
                     self.has_boiled = False
 
@@ -235,7 +239,7 @@ class Kettle():
             return True
 
     def print_status(self):
-        print self.current_status()
+        logging.info(self.current_status())
 
     def current_status(self):
         return {
@@ -246,7 +250,7 @@ class Kettle():
         }
 
     def find(self, ip_range):
-        print "Looking for iKettle in range %s" % ip_range
+        logging.info("Looking for iKettle in range %s" % ip_range)
 
 
         for n in range(1,255):
@@ -258,32 +262,32 @@ class Kettle():
         return False
 
     def ask_if_kettle(self, ip):
-        print ip,
+        logging.info(ip,)
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(.2)
             sock.connect((ip, 2000))
-            print " - Responded"
-            print " - Are you a kettle?"
+            logging.info(" - Responded")
+            logging.info(" - Are you a kettle?")
 
             try:
                 sock.settimeout(30)
                 sock.send("HELLOKETTLE\n")
                 response = sock.recv(4096)
                 if response.startswith("HELLOAPP"):
-                    print " - Yes!"
+                    logging.info(" - Yes!")
                     return True
                 else:
-                    print "No! %s" % response
+                    logging.info("No! %s" % response)
             except socket.timeout:
-                print " - No, you are not."
+                logging.info(" - No, you are not.")
 
 
         except socket.timeout:
-            print " - Timeout" 
+            logging.info(" - Timeout" )
         except socket.error:
-            print " - Refused"
+            logging.info(" - Refused")
         except Exception as e:
             exc_type, exc_obj, exc_tb = sys.exc_info()
-            print exc_type, exc_obj
+            logging.info(exc_type, exc_obj)
         sock.close()
