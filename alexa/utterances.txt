@@ -1,0 +1,13 @@
+SetTemperature Set the kettle to {Temperature}
+SetTemperature Heat the kettle to {Temperature}
+SetTemperature Tell Kettle {Temperature}
+StartKettle Start the kettle
+StartKettle Put the kettle on
+StopKettle Stop the kettle
+StopKettle Stop kettle
+StopKettle Tell kettle Stop
+KeepWarm and keep it there
+KeepWarm Tell Kettle Warmer On
+KeepWarmStop Tell Kettle Warmer Off
+KeepWarmStop Stop warming
+GetStatus Ask Kettle for status 

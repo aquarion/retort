@@ -32,15 +32,18 @@ class Kettle():
     current_temp = False
     is_boiling = False
     is_warm = False
-    configip = 0
     ip = False
 
     ip_range = False
 
     is_boiling = False
 
-    def __init__(self, configip, argip):
-	logger = logging.getLogger("Kettle")
+    def __init__(self):
+        return self.initialise()
+
+    def initialise(self):
+        logger = logging.getLogger("Kettle")
+        logging.basicConfig(level=logging.DEBUG)
 
         self.config = ConfigParser.ConfigParser()
         sucess = self.config.read('ikettle.conf')
@@ -59,14 +62,11 @@ class Kettle():
             self.save_config()
 
         self.kettleconnected = 0
-        #self.configip = configip
-        #self.ip = configip
 
         if not self.ip or not self.ask_if_kettle(self.ip):
             self.ip = self.find(self.ip_range)
             self.config.set('Network', 'kettleip', self.ip)
             self.save_config()
-
 
         if self.ip:
             logging.info("Found kettle on %s" % self.ip)
@@ -116,10 +116,23 @@ class Kettle():
         self.kettlesend("set sys output 0x0")
 
     def kettlesend(self, data):
-        logging.info(">>> %s " % data)
-        self.sock.send(data+"\n")
-        line = self.sock.recv(4096)
-        self.handler(line)
+        try:
+            logging.info(">>> %s " % data)
+
+            self.sock.send(data+"\n")
+            line = self.sock.recv(4096)
+            self.handler(line)
+        except socket.error, e:
+            logging.error(">>> %s: %s " % (e.__class__.__name__, e.getMessage() ) )
+            raise
+        except IOError, e:
+            logging.error(">>> %s: %s " % (e.__class__.__name__, e.getMessage() ) )
+            if e.errno == errno.EPIPE:
+                logging.info(">>> Attempting to reinit")
+                self.initialise()
+                self.kettlesend(data)
+            else:
+                raise
 
 
     def gotofail(self):

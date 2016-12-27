@@ -1,0 +1,28 @@
+{
+  "intents": [
+    {
+      "intent": "SetTemperature",
+      "slots": [
+        {
+          "name": "Temperature",
+          "type": "LIST_OF_TEMPERATURES"
+        }
+      ]
+    },
+    {
+      "intent": "StartKettle"
+    },
+    {
+      "intent": "StopKettle"
+    },
+    {
+      "intent": "KeepWarm"
+    },
+    {
+      "intent": "KeepWarmStop"
+    },
+    {
+      "intent": "GetStatus"
+    }
+  ]
+}
