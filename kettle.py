@@ -42,11 +42,32 @@ class Kettle():
         return self.initialise()
 
     def initialise(self):
-        logger = logging.getLogger("Kettle")
-        logging.basicConfig(level=logging.DEBUG)
 
         self.config = ConfigParser.ConfigParser()
         sucess = self.config.read('ikettle.conf')
+
+        logger = logging.getLogger("Kettle")
+        logging.basicConfig(level=logging.DEBUG)
+
+        try:
+            items = self.config.items("Logging")
+            try:
+                logfile =  self.config.get('Logging', 'filename')
+            except ConfigParser.NoOptionError:
+                logfile = False
+
+            try:
+                levelname =  self.config.get('Logging', 'level')
+                level = logging.getLevelName('INFO')
+            except ConfigParser.NoOptionError:
+                level = "WARNING"
+
+            logging.info("Logging to %s @ %s" % (logfile, level))
+            logging.basicConfig(filename=logfile, level=level)
+
+        except ConfigParser.NoSectionError:
+            logging.basicConfig(level=logging.DEBUG)
+
 
         try:
             self.ip = self.config.get('Network', 'kettleip')
@@ -115,24 +136,23 @@ class Kettle():
     def stopboil(self):
         self.kettlesend("set sys output 0x0")
 
-    def kettlesend(self, data):
+    def kettlesend(self, data, retry=False):
         try:
             logging.info(">>> %s " % data)
 
             self.sock.send(data+"\n")
             line = self.sock.recv(4096)
             self.handler(line)
-        except socket.error, e:
+        except (socket.error, IOError), e:
             logging.error(">>> %s: %s " % (e.__class__.__name__, e.getMessage() ) )
-            raise
-        except IOError, e:
-            logging.error(">>> %s: %s " % (e.__class__.__name__, e.getMessage() ) )
-            if e.errno == errno.EPIPE:
+
+            if retry:
+                logging.error(">>> Failed again. Fool me once...")
+                raise
+            else:
                 logging.info(">>> Attempting to reinit")
                 self.initialise()
-                self.kettlesend(data)
-            else:
-                raise
+                self.kettlesend(data, True)
 
 
     def gotofail(self):

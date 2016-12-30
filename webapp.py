@@ -39,26 +39,31 @@ def index():
 
 @app.route('/status')
 def status():
+	logging.info("> REQUEST: Getting status")
 	return jsonify(kettle.update_status())
 
 @app.route('/stop')
 def stop():
+	logging.info("> REQUEST: Stopping")
 	kettle.update_status()
 	kettle.stopboil()
 	return jsonify(kettle.current_status())
 
 @app.route('/start')
 def start():
+	logging.info("> REQUEST: Starting")
 	kettle.clickboil()
 	return jsonify(kettle.current_status())
 
 @app.route('/warm')
 def warm():
+	logging.info("> REQUEST: Toggle Warm")
 	kettle.togglewarm()
 	return jsonify(kettle.current_status())
 
 @app.route('/temp/<temperature>')
 def temp(temperature):
+	logging.info("> REQUEST: Setting temperature to %s" % temperature)
 	kettle.set_temp(temperature)
 	return jsonify(kettle.current_status())
 
@@ -70,14 +75,14 @@ def alexa():
 	alexa_response = AlexaResponse(alexa_request)
 
 	status = kettle.current_status()
-	print status
-	print alexa_request.intent
-	print alexa_request.slots
+
+	logging.info(" REQUEST: Alexa Request: %s" % alexa_request.intent)
 
 	if alexa_request.intent == "StartKettle":
 		if status['is_boiling']:
 			alexa_response.say("Kettle is already going")
 		else:
+			alexa_response.say("Okay")
 			kettle.clickboil()
 
 	elif alexa_request.intent == "SetTemperature":
