@@ -144,7 +144,7 @@ class Kettle():
             line = self.sock.recv(4096)
             self.handler(line)
         except (socket.error, IOError), e:
-            logging.error(">>> %s: %s " % (e.__class__.__name__, e.getMessage() ) )
+            logging.error(">>> %s: %s " % (e.__class__.__name__, e ) )
 
             if retry:
                 logging.error(">>> Failed again. Fool me once...")
