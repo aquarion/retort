@@ -104,6 +104,9 @@ class Kettle():
 
 
     def set_temp(self, temp):
+        
+        if not self.is_boiling:
+            self.kettlesend("set sys output 0x4")
 
         temperatures = {
             '100' : '0x80',
