@@ -1,5 +1,6 @@
 import urllib2
 import base64
+import os
 
 def lambda_handler(event, context):
     access_token = event['payload']['accessToken']
@@ -74,10 +75,10 @@ def handleControl(context, event):
     return { 'header': header, 'payload': payload }
 
 def sendRequest(path):
-    url = "https://kettle.treacle.mine.nu/%s" % path
+    url = "%s/%s" % (os.environ['url'], path)
     print " - URL: %s" % url
     request = urllib2.Request(url)
-    base64string = base64.b64encode('%s:%s' % ("aws", "6KzhBuFw6wo"))
+    base64string = base64.b64encode('%s:%s' % (os.environ['username'], os.environ['password']))
     request.add_header("Authorization", "Basic %s" % base64string)   
     response = urllib2.urlopen(request)
 
