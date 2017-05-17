@@ -5,10 +5,8 @@
 #
 # things to do: 
 #    Move API bits to flask-restful
-#	 Add a GUI
 #    Add a pretty GUI
 #    WebSockets for GUI updates? I heard you like sockets, so I put sockets in your sockets
-#    Save value for IP
 #
 # Nicholas 'Aquarion' Avenell 2015
 
@@ -17,25 +15,37 @@ from flask import jsonify
 from flask import render_template
 from flask import request
 
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
 from kettle import Kettle
 
 from alexa_cxn import AlexaRequest, AlexaResponse
 
 import time
 import logging
+import atexit
+
+logger = logging.getLogger("Retort")
+logger.propagate = False
+
+from systemd.journal import JournaldLogHandler
+
+logger.addHandler(JournaldLogHandler())
+logger.setLevel(logging.INFO)
+
+logging.basicConfig(level=logging.CRITICAL)
+
 
 app = Flask(__name__)
 
 kettle = Kettle()
 
-logger = logging.getLogger("Retort")
-
-logging.basicConfig(level=logging.DEBUG)
-
 @app.route('/')
 def index():
 	return render_template('index.html', kettle=kettle.update_status())
 
+def keepalive():
+	kettle.update_status()
 
 @app.route('/status')
 def status():
@@ -146,3 +156,14 @@ def alexa():
 
 
 	return jsonify(alexa_response.respond())
+
+scheduler = BackgroundScheduler()
+scheduler.start()
+scheduler.add_job(
+    func=keepalive,
+    trigger=IntervalTrigger(minutes=5),
+    id='checking_status',
+    name='Check kettle status (keepalive)',
+    replace_existing=True)
+
+atexit.register(lambda: scheduler.shutdown())
