@@ -23,6 +23,12 @@ import sys
 import ConfigParser
 import logging
 
+from events import Events
+
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+import atexit
+
 
 class Kettle():
 
@@ -31,6 +37,7 @@ class Kettle():
     kettleconnected = 0
     current_temp = False
     is_boiling = False
+    was_boiling = False
     is_warm = False
     ip = False
 
@@ -38,8 +45,27 @@ class Kettle():
 
     is_boiling = False
 
+    events = False
+
     def __init__(self):
+        self.events = Events()
+
+
+        import atexit
+        scheduler = BackgroundScheduler()
+        scheduler.start()
+        scheduler.add_job(
+            func=self.update_status,
+            trigger=IntervalTrigger(seconds=5),
+            id='checking_status',
+            name='Check kettle status (keepalive)',
+            replace_existing=True)
+
+        atexit.register(lambda: scheduler.shutdown())
+
         return self.initialise()
+
+
 
     def initialise(self):
 
@@ -122,6 +148,8 @@ class Kettle():
         if temp in temperatures:
             self.kettlesend("set sys output %s" % temperatures[temp])
 
+        self.events.temp_changed(temp)
+
         return True
         #self.bwarm.connect("clicked", self.clicksend, "set sys output 0x8")
         
@@ -134,9 +162,11 @@ class Kettle():
             self.kettlesend("set sys output 0x0")
 
     def togglewarm(self):
+        self.events.kettle_warm()
         self.kettlesend("set sys output 0x8")
 
     def stopboil(self):
+        self.events.kettle_stop()
         self.kettlesend("set sys output 0x0")
 
     def kettlesend(self, data, retry=False):
@@ -175,6 +205,7 @@ class Kettle():
             # self.sock.settimeout(500)
             self.sock.connect((self.ip,2000))
             self.sock.send("HELLOKETTLE\n")
+            self.events.kettle_connected()
             return True
         except:
             self.ip=""  # the one given didnt work
@@ -182,6 +213,9 @@ class Kettle():
 
     def update_status(self):
         self.kettlesend("get sys status")
+        return self.current_status()
+
+    def latest_status(self):
         return self.current_status()
 
     def check_connected(self):
@@ -236,8 +270,15 @@ class Kettle():
 
                         if key&0x1:
                             self.is_boiling = True
+                            if self.was_boiling == False:
+                                self.events.kettle_start()
+                            self.was_boiling = True
+
                         else:
                             self.is_boiling = False
+                            if self.was_boiling == True:
+                                self.events.kettle_stop()
+                            self.was_boiling = False
 
                 if (myline == "sys status 0x100"):
                     logging.info("<<<   Temp is 100")

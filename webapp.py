@@ -14,17 +14,12 @@ from flask import Flask
 from flask import jsonify
 from flask import render_template
 from flask import request
-
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.interval import IntervalTrigger
 from kettle import Kettle
 
 from alexa_cxn import AlexaRequest, AlexaResponse
 
 import time
 import logging
-import atexit
-
 logger = logging.getLogger("Retort")
 logger.propagate = False
 
@@ -33,29 +28,31 @@ from systemd.journal import JournaldLogHandler
 logger.addHandler(JournaldLogHandler())
 logger.setLevel(logging.INFO)
 
-logging.basicConfig(level=logging.CRITICAL)
+logging.basicConfig(level=logging.INFO)
 
 
 app = Flask(__name__)
 
 kettle = Kettle()
 
+def something_changed():
+     print "Kettle Start %s" % kettle
+
+kettle.events.kettle_start += something_changed
+
 @app.route('/')
 def index():
-	return render_template('index.html', kettle=kettle.update_status())
-
-def keepalive():
-	kettle.update_status()
+	return render_template('index.html', kettle=kettle.latest_status())
 
 @app.route('/status')
 def status():
 	logging.info("> REQUEST: Getting status")
-	return jsonify(kettle.update_status())
+	return jsonify(kettle.latest_status())
 
 @app.route('/stop')
 def stop():
 	logging.info("> REQUEST: Stopping")
-	kettle.update_status()
+	kettle.latest_status()
 	kettle.stopboil()
 	return jsonify(kettle.current_status())
 
@@ -77,7 +74,6 @@ def temp(temperature):
 	kettle.set_temp(temperature)
 	return jsonify(kettle.current_status())
 
-#app.run(debug=True)
 
 @app.route('/alexa', methods=['GET', 'POST'])
 def alexa():
@@ -157,13 +153,3 @@ def alexa():
 
 	return jsonify(alexa_response.respond())
 
-scheduler = BackgroundScheduler()
-scheduler.start()
-scheduler.add_job(
-    func=keepalive,
-    trigger=IntervalTrigger(minutes=5),
-    id='checking_status',
-    name='Check kettle status (keepalive)',
-    replace_existing=True)
-
-atexit.register(lambda: scheduler.shutdown())
