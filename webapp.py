@@ -26,9 +26,9 @@ logger.propagate = False
 from systemd.journal import JournaldLogHandler
 
 logger.addHandler(JournaldLogHandler())
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.WARNING)
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 
 
 app = Flask(__name__)
