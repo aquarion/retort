@@ -312,7 +312,6 @@ class Kettle():
                     self.is_boiling = False
                     self.has_boiled = False
 
-            self.print_status()
             return True
 
     def print_status(self):
